@@ -1,62 +1,77 @@
 #include "WiFi.h"
 #include "AsyncUDP.h"
-//#include "esp_wifi.h"
 
-static const char* TAG = "MyModule";
+const char * ssid = "MyESP32AP";// Skal aftales
+const char * password = "testpassword";// Skal aftales
 
-const char * ssid = "MyESP32AP";
-const char * password = "testpassword";
-// Set your Static IP address
-IPAddress local_IP(192, 168, 4, 2);
+// Tildeler fast Ip-adresse til at identificere 'modulet' 
+IPAddress local_IP(192, 168, 4, 3);// Skal aftales
 IPAddress gateway(192, 168, 1, 1);
 IPAddress subnet(255, 255, 0, 0);
 
+WiFiUDP UDP;//KUN HVIS Unicast
 AsyncUDP udp;
 
 void setup()
 {
+    //0. starter seriel kommunikation
     Serial.begin(115200);
-    
+    while (!Serial){ delay(10);}
+
+    // 1. Sætter lokal access point op. Formålet er at kommunikere med de andre ESPér
     WiFi.mode(WIFI_STA);
-    // esp_wifi_set_protocol( WIFI_IF_STA, WIFI_PROTOCOL_LR );
-    // Configures static IP address
+
+    
+    // 2. sætter den faste IPadresse op defineret ovenfor 
     if (!WiFi.config(local_IP, gateway, subnet)) {
         Serial.println("STA Failed to configure");
+        //ESP.restart(); //Respons 'Erlang-style'
     }
 
+    // 3. Starter accespoint
     WiFi.begin(ssid, password);
-    if (WiFi.waitForConnectResult() != WL_CONNECTED) {
-        ESP_LOGW("WiFi Failed");
-        while(1) {
-            delay(1000);
-        }
+    Serial.print("Venter på forbindelse");
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(500);
+        Serial.print(".");
+        //ESP.restart(); Som alternativ - 'Erlang-style'
     }
-    WiFi.setAutoReconnect(true);
 
-    if(udp.listen(12345)) {
+    // 4. lytter efter indkommen beskeder på port:22345 ... Vi har 65.535 portnumbers at vælge imellem.
+    if(udp.listen(WiFi.localIP(),22345)) {
         Serial.print("UDP Listening on IP: ");
-        Serial.println(WiFi.localIP());
-        
-
+        Serial.println();
         udp.onPacket([](AsyncUDPPacket packet) {
+            // Serial.print("UDP Packet Type: ");
+            Serial.print(packet.isBroadcast()?"Broadcast":packet.isMulticast()?"Multicast":"Unicast");
             Serial.print(", From: ");
             Serial.print(packet.remoteIP());
-            Serial.print(":");
-            Serial.print(packet.remotePort());
+            //Flere eksempler på 'metakommunikation'
+            // Serial.print(":");
+            // Serial.print(packet.remotePort());
+            // Serial.print(", To: ");
+            // Serial.print(packet.localIP());
+            // Serial.print(":");
+            // Serial.print(packet.localPort());
             Serial.print(", Data: ");
             Serial.write(packet.data(), packet.length());
+            
             Serial.println();
-            //reply to the client
-            packet.printf("Got %u bytes of data", packet.length());
+            // evt auto svar til server
+            // packet.printf(" %u bytes of data", packet.length());
         });
     }
-   
 }
 
 void loop()
 {
-    delay(2000);
-    //Send broadcast til port 1234
-    udp.broadcastTo("Er her nogen? æøå? Er her nogen? æøå? Er her nogen? æøå?", 1234);
-   
+    delay(1000);//ALDRIG delay i produktion
+    //Send broadcast  til port 1234
+    udp.broadcastTo("Hej server - eller andre moduler med fast portnummer på", 1234);
+    delay(1000);//ALDRIG delay i produktion
+
+    //unicast til IP "192.168.4.1" og port 1234
+    UDP.beginPacket("192.168.4.1",1234);
+    UDP.print("Unicast Besked fra Esp32 batterimodul til server og KUN server");
+    UDP.endPacket();
 }
