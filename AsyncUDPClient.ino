@@ -54,7 +54,19 @@ void setup()
             // Serial.print(":");
             // Serial.print(packet.localPort());
             Serial.print(", Data: ");
-            Serial.write(packet.data(), packet.length());
+            
+            // Serial.write(packet.data(), packet.length());
+
+            if (packet.length() > 0)
+            {
+                char buffer[packet.length()];
+                //cast´er fra byte-array til char-array
+                // sprintf(buffer, "%s", packet.data());
+                // buffer[packet.length()] ='\0';// Da unicast ikke er '\0' termineret    
+                String testString = String( (char*) packet.data());
+                // Serial.printf("%s\n",buffer);
+                Serial.println(testString);
+            }
             
             Serial.println();
             // evt auto svar til server
@@ -72,6 +84,6 @@ void loop()
 
     //unicast til IP "192.168.4.1" og port 1234
     UDP.beginPacket("192.168.4.1",1234);
-    UDP.print("Unicast Besked fra Esp32 batterimodul til server og KUN server");
+    UDP.print("Unicast Besked fra Esp32 batterimodul til server og KUN server");//low level kom. skal '/0' termineres
     UDP.endPacket();
 }
