@@ -1,28 +1,40 @@
 #include "WiFi.h"
 #include "AsyncUDP.h"
 
-const char * ssid = "MyESP32AP";// Skal aftales
-const char * password = "testpassword";// Skal aftales
+#define LED 2
+
+// const char* ssid = "02495500"; //Enter SSID
+// const char* password = "00809748"; //Enter Password
+const char* ssid = "MyESP32AP"; //Enter SSID
+const char* password = "testpassword"; //Enter Password
 
 // Tildeler fast Ip-adresse til at identificere 'modulet' 
-IPAddress local_IP(192, 168, 4, 3);// Skal aftales
+IPAddress local_IP(192, 168, 4, 3); 
 IPAddress gateway(192, 168, 1, 1);
 IPAddress subnet(255, 255, 0, 0);
 
+int t[7] = {0,250, 243, 320, 331, 270, 400};
+int v[4] = {135, 32, 41,35};
+int I[1] = {120};
+int i = 0;
+
 WiFiUDP UDP;//KUN HVIS Unicast
 AsyncUDP udp;
+unsigned long time_last_mesurement = 0;
 
 void setup()
 {
+    pinMode(LED,OUTPUT);
+
     //0. starter seriel kommunikation
     Serial.begin(115200);
     while (!Serial){ delay(10);}
 
-    // 1. Sætter lokal access point op. Formålet er at kommunikere med de andre ESPér
+    // // 1. Sætter lokal access point op. Formålet er at kommunikere med de andre ESPér
     WiFi.mode(WIFI_STA);
 
     
-    // 2. sætter den faste IPadresse op defineret ovenfor 
+    // // 2. sætter den faste IPadresse op defineret ovenfor 
     if (!WiFi.config(local_IP, gateway, subnet)) {
         Serial.println("STA Failed to configure");
         //ESP.restart(); //Respons 'Erlang-style'
@@ -40,32 +52,44 @@ void setup()
     // 4. lytter efter indkommen beskeder på port:22345 ... Vi har 65.535 portnumbers at vælge imellem.
     if(udp.listen(WiFi.localIP(),22345)) {
         Serial.print("UDP Listening on IP: ");
-        Serial.println();
+        Serial.println(WiFi.localIP());
         udp.onPacket([](AsyncUDPPacket packet) {
             // Serial.print("UDP Packet Type: ");
             Serial.print(packet.isBroadcast()?"Broadcast":packet.isMulticast()?"Multicast":"Unicast");
+            
             Serial.print(", From: ");
             Serial.print(packet.remoteIP());
             //Flere eksempler på 'metakommunikation'
-            // Serial.print(":");
-            // Serial.print(packet.remotePort());
+            Serial.print(":");
+            Serial.print(packet.remotePort());
             // Serial.print(", To: ");
             // Serial.print(packet.localIP());
             // Serial.print(":");
             // Serial.print(packet.localPort());
             Serial.print(", Data: ");
             
-            // Serial.write(packet.data(), packet.length());
+            Serial.write(packet.data(), packet.length());
+                    Serial.println();
 
             if (packet.length() > 0)
             {
-                char buffer[packet.length()];
-                //cast´er fra byte-array til char-array
-                sprintf(buffer, "%s", packet.data());
-                buffer[packet.length()] ='\0';// Da unicast ikke er '\0' termineret   
-                // String testString = String( (char*) packet.data());
-                // Serial.printf("%s\n",buffer);
-                Serial.println(buffer);
+                char buffer[packet.length()+1];
+                // //cast´er fra byte-array til char-array
+                if(!packet.isBroadcast()){
+                    sprintf(buffer, "%s", packet.data());
+                    buffer[packet.length()] ='\0';// Da unicast ikke er '\0' termineret   
+                    Serial.println("HER:");
+                    Serial.println(buffer);
+                    Serial.println(atoi(buffer));
+                    Serial.println();
+                }else{
+                // Hvis vi KUN bruger broadcast
+                String testString = String( (char*) packet.data());
+                Serial.println(testString);
+
+                }
+
+
             }
             
             Serial.println();
@@ -73,20 +97,33 @@ void setup()
             // packet.printf(" %u bytes of data", packet.length());
         });
     }
+    
 }
 
 void loop()
 {
-    delay(1000);//ALDRIG delay i produktion
-    //Send broadcast  til port 1234
-    udp.broadcastTo("Hej server - eller andre moduler med fast portnummer på", 1234);
-    delay(1000);//ALDRIG delay i produktion
+    
+    if (millis() - time_last_mesurement > 1000)
+    {
+        char buffer[128];
+        t[1]+=random(3)-1;
+        t[2]+=random(3)-1;
+        t[3]+=random(3)-1;
+        t[4]+=random(3)-1;
+        t[5]+=random(3)-1;
+        t[6]+=random(3)-1;
+        v[0]+=random(3)-1;
+        v[1]+=random(3)-1;
+        v[2]+=random(3)-1;
+        v[3]+=random(3)-1;
+        I[0]+=random(3)-1;
 
-    //unicast til IP "192.168.4.1" og port 1234
-    UDP.beginPacket("192.168.4.1",1234);
-    UDP.print("Unicast Besked fra Esp32 batterimodul til server og KUN server");//low level kom. skal '/0' termineres
-    UDP.endPacket();
-    UDP.beginPacket("192.168.4.1",1234);
-    UDP.print(12345678);
-    UDP.endPacket();
+        sprintf(buffer,"t:%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",i++,t[1],t[2],t[3],t[4],t[5],t[6],v[0],v[1],v[2],v[3],I[0]);
+        // Serial.print("Sender ny besked: ");
+        // Serial.println(buffer);
+        time_last_mesurement = millis();
+        // client.send(buffer);
+        udp.broadcastTo(buffer, 1234);
+    }
+
 }
